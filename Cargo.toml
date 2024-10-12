@@ -1,0 +1,37 @@
+[package]
+name = "amax-ads"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "amax_ads"
+crate-type = ["cdylib"]
+
+[dependencies]
+retour = { git = "ssh://git@github.com/Hpmason/retour-rs.git", features = [
+    "thiscall-abi",
+    "static-detour",
+] }
+windows = { version = "0.56.0", features = [
+    "Win32_Foundation",
+    "Foundation_Numerics",
+    "Win32_System_SystemServices",
+    "Win32_System_Memory",
+    "Win32_System_LibraryLoader","Win32_Graphics_Direct3D9", "Win32_Graphics_Gdi", "Win32_Graphics_Direct3D", "Win32_Graphics_Gdi"
+] }
+
+log = { version = "0.4.20", features = ["max_level_debug","release_max_level_debug"]}
+log-panics = { version = "2.1.0", features = ["with-backtrace"] }
+simplelog = "0.12.1"
+known-folders = "1.0.1"
+reqwest = { version = "0.11.20", features = ["blocking","gzip","stream","rustls-tls"] }
+zip = "0.6"
+
+[profile.release]
+opt-level = "z"
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+strip = true
