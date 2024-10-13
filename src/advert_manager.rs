@@ -3,7 +3,7 @@ use retour::static_detour;
 use std::ffi::{c_void, CStr, CString};
 use std::os::raw::c_char;
 use std::path::PathBuf;
-use std::{fs, io, ptr, thread};
+use std::{fs, ptr, thread};
 
 use windows::Win32::Graphics::Direct3D9::*;
 
@@ -42,8 +42,8 @@ struct AdvertTexture {
 }
 
 struct PLevelResource {
-    pub header1: [u8; 0x10],
-    byte1: u8,
+    _header1: [u8; 0x10],
+    _byte1: u8,
     level_name: [c_char; 0x107],
 }
 
@@ -94,7 +94,6 @@ pub unsafe fn advert_manager_initialize_hook() {
 }
 
 fn advert_manager_initialize(AdvertManager: *mut AdvertManager) {
-
     thread::spawn(|| {
         if let Some(appdata_amax_path) = get_appdata_amax_path() {
             let local_checksum = get_local_checksum(&appdata_amax_path).unwrap_or_default();
@@ -108,9 +107,19 @@ fn advert_manager_initialize(AdvertManager: *mut AdvertManager) {
                     false => {
                         info!("Downloading latest ads files...");
                         remove_ads_dir(&appdata_amax_path);
-                        download_ads_zip(appdata_amax_path.clone());
-                        unpack_ads(appdata_amax_path.clone().join("ads.zip"));
-                        write_ads_checksum(&appdata_amax_path, remote_checksum);
+                        match download_ads_zip(&appdata_amax_path) {
+                            Some(path_to_zip) => match unpack_ads(&path_to_zip) {
+                                Ok(_) => {
+                                    write_ads_checksum(&appdata_amax_path, remote_checksum);
+                                }
+                                Err(e) => {
+                                    error!("Failed to unpack ads archive - {e}")
+                                }
+                            },
+                            None => {
+                                error!("Failed to download ads archive!")
+                            }
+                        };
                     }
                 },
                 None => {}
@@ -126,13 +135,35 @@ fn zone_postload(
     pLevelResource: *mut PLevelResource,
     pLevelInstance: *mut c_void,
 ) {
+    let appdata_amax_path = match get_appdata_amax_path() {
+        Some(path) => path,
+        None => {
+            error!("Failed to get appdata blur dir. Falling back to base function.");
+            return unsafe {
+                EnterZone_PostLoad.call(AdvertManager, pLevelResource, pLevelInstance)
+            };
+        }
+    };
+
+    let ads_path = appdata_amax_path.join("ads");
+
+    match ads_path.is_dir() {
+        true => {}
+        false => {
+            error!("Failed to get ads dir. Falling back to base function.");
+            return unsafe {
+                EnterZone_PostLoad.call(AdvertManager, pLevelResource, pLevelInstance)
+            };
+        }
+    }
+
     unsafe {
         (*AdvertManager).level_instance_ptr = pLevelInstance;
 
         let level_name_full = CStr::from_ptr((*pLevelResource).level_name.as_ptr())
             .to_str()
             .unwrap_or_default();
-
+        
         debug!("Level file path - {}", level_name_full);
 
         let level_name = level_name_full
@@ -147,12 +178,11 @@ fn zone_postload(
             return;
         }
 
-        let get_ads_pos_fn: GetAdPositionOnLevel = unsafe { std::mem::transmute(0x00723cf0) };
-        let get_level_ads_data: GetLevelAdsData = unsafe { std::mem::transmute(0x0087de10) };
+        let get_ads_pos_fn: GetAdPositionOnLevel = std::mem::transmute(0x00723cf0) ;
+        let get_level_ads_data: GetLevelAdsData = std::mem::transmute(0x0087de10) ;
 
         let mut j: isize = 0;
 
-        let appdata_amax_path = get_appdata_amax_path().unwrap();
         let d3d9_device = match get_d3d9_device() {
             Some(device) => device,
             None => {
@@ -163,7 +193,7 @@ fn zone_postload(
         for i in (1..num_of_ads + 1).rev() {
             let texture_name = format!("advert{}", i);
             debug!("Checking texture {}", &texture_name);
-            let name_of_texture = CString::new(texture_name).unwrap();
+            let name_of_texture = CString::new(texture_name).unwrap_or_default();
 
             let mut adv_pos = 0;
             let level_ads_data = get_level_ads_data(pLevelResource as _);
@@ -222,12 +252,14 @@ fn zone_postload(
 }
 
 pub fn get_appdata_amax_path() -> Option<PathBuf> {
-    let dir = known_folders::get_known_folder_path(known_folders::KnownFolder::RoamingAppData)
-        .ok_or_else(|| io::Error::other("Couldn't get %APPDATA%/Roaming as a KnownFolder"))
-        .unwrap()
-        .join("bizarre creations")
-        .join("blur")
-        .join("amax");
+    let dir = match known_folders::get_known_folder_path(known_folders::KnownFolder::RoamingAppData)
+    {
+        Some(appdata_dir) => appdata_dir
+            .join("bizarre creations")
+            .join("blur")
+            .join("amax"),
+        None => return None,
+    };
 
     if !&dir.is_dir() {
         match fs::create_dir_all(&dir) {

@@ -101,9 +101,9 @@ pub fn get_module_symbol_address(module: &str, symbol: &str) -> Option<usize> {
         .encode_utf16()
         .chain(iter::once(0))
         .collect::<Vec<u16>>();
-    let symbol = CString::new(symbol).unwrap();
+    let symbol = CString::new(symbol).unwrap_or_default();
     unsafe {
-        let handle = GetModuleHandleW(PCWSTR(module.as_ptr() as _)).unwrap();
+        let handle = GetModuleHandleW(PCWSTR(module.as_ptr() as _)).unwrap_or_default();
         match GetProcAddress(handle, PCSTR(symbol.as_ptr() as _)) {
             Some(func) => Some(func as usize),
             None => None,

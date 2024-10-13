@@ -1,11 +1,8 @@
-use std::ffi::c_void;
-
 use advert_manager::{advert_manager_initialize_hook, zone_postload_hook};
 use log::debug;
 use windows::{
-    core::PCSTR,
+    Win32::Foundation::HMODULE,
     Win32::System::SystemServices::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH},
-    Win32::{Foundation::HMODULE, System::LibraryLoader::GetModuleHandleA},
 };
 
 mod advert_manager;
@@ -61,7 +58,7 @@ pub fn init(module: HMODULE) {
     unsafe { zone_postload_hook() };
     unsafe { advert_manager_initialize_hook() };
 
-    let _ptr_base: *mut c_void = unsafe { GetModuleHandleA(PCSTR::null()) }.unwrap().0 as _;
+    //let _ptr_base: *mut c_void = unsafe { GetModuleHandleA(PCSTR::null()) }.unwrap().0 as _;
 }
 
 pub fn free(module: HMODULE) {

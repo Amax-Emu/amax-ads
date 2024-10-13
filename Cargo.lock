@@ -30,7 +30,7 @@ dependencies = [
 
 [[package]]
 name = "amax-ads"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "known-folders",
  "log",

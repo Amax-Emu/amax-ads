@@ -27,7 +27,7 @@ pub fn get_remote_checksum() -> Option<String> {
     }
 }
 
-pub fn download_ads_zip(path: PathBuf) -> Option<PathBuf> {
+pub fn download_ads_zip(path: &Path) -> Option<PathBuf> {
     let url = url_gen("/ads.zip");
 
     let ads_zip_path = path.join("ads.zip");
@@ -82,7 +82,7 @@ pub fn write_ads_checksum(appdata_amax_path: &Path, checksum: String) {
     }
 }
 
-pub fn unpack_ads(path: PathBuf) -> bool {
+pub fn unpack_ads(path: &Path) -> Result<bool, std::io::Error> {
     let fname = path;
 
     let base_path = match fname.parent() {
@@ -90,12 +90,12 @@ pub fn unpack_ads(path: PathBuf) -> bool {
         None => PathBuf::new(),
     };
 
-    let file = fs::File::open(fname).unwrap();
+    let file = fs::File::open(fname)?;
 
-    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut archive = zip::ZipArchive::new(file)?;
 
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i).unwrap();
+        let mut file = archive.by_index(i)?;
         let outpath = match file.enclosed_name() {
             Some(path) => {
                 let temp_path = base_path.join(path);
@@ -108,7 +108,7 @@ pub fn unpack_ads(path: PathBuf) -> bool {
 
         if (*file.name()).ends_with('/') {
             debug!("File {} extracted to \"{}\"", i, outpath.display());
-            fs::create_dir_all(&outpath).unwrap();
+            fs::create_dir_all(&outpath)?;
         } else {
             debug!(
                 "File {} extracted to \"{}\" ({} bytes)",
@@ -119,15 +119,15 @@ pub fn unpack_ads(path: PathBuf) -> bool {
 
             if let Some(p) = outpath.parent() {
                 if !p.exists() {
-                    fs::create_dir_all(p).unwrap();
+                    fs::create_dir_all(p)?;
                 }
             }
-            let mut outfile = fs::File::create(&outpath).unwrap();
-            io::copy(&mut file, &mut outfile).unwrap();
+            let mut outfile = fs::File::create(&outpath)?;
+            io::copy(&mut file, &mut outfile)?;
         }
     }
 
-    true
+    Ok(true)
 }
 
 pub fn get_local_checksum(appdata_amax_path: &Path) -> Option<String> {
@@ -141,32 +141,3 @@ pub fn get_local_checksum(appdata_amax_path: &Path) -> Option<String> {
         }
     }
 }
-
-// pub fn apply_update(update_path: PathBuf) {
-//     info!("Applying an update...");
-//     for file_path in &self.base_updated_files {
-
-//         let temp = &self.temp_path.join(file_path);
-
-//         match fs::metadata(temp){
-//             Ok(metadata) => {
-//                 if metadata.is_dir() {
-//                     continue;
-//                 }
-//             },
-//             Err(_) => continue,
-//         };
-
-//         info!("{}",&self.game_path.join(file_path).display());
-
-//         let _ = fs::copy(
-//             &self.temp_path.join(file_path),
-//             &self.game_path.join(file_path),
-//         );
-//     }
-
-//     let mut version_file =
-//         fs::File::create(&self.game_path.join("version")).unwrap();
-//     io::copy(&mut self.remote_version.as_bytes(), &mut version_file).unwrap();
-//     info!("Done!");
-// }
