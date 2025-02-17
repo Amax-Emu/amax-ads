@@ -1,7 +1,4 @@
-use std::{
-	ffi::{c_char, c_void, CStr, CString},
-	str::FromStr,
-};
+use std::ffi::{c_char, c_void, CStr};
 
 use retour::static_detour;
 
@@ -134,62 +131,64 @@ pub fn hook_enter_zone_post_load(
 	p_level_resource: *mut PLevelResource,
 	p_level_instance: *mut c_void,
 ) {
-	// return unsafe { EnterZone_PostLoad.call(advert_manager, p_level_resource, p_level_instance) };
 	unsafe {
 		(*advert_manager).level_instance_ptr = p_level_instance;
+	}
 
-		let level_name_full = CStr::from_ptr((*p_level_resource).level_name.as_ptr())
-			.to_str()
-			.unwrap_or_default();
+	let level_name_full = unsafe { CStr::from_ptr((*p_level_resource).level_name.as_ptr()) }
+		.to_str()
+		.unwrap_or_default();
 
-		log::trace!("level_name_full: \"{level_name_full}\"");
+	log::trace!("level_name_full: \"{level_name_full}\"");
 
-		let level_name = level_name_full
-			.trim_start_matches(".\\levels\\")
-			.trim_end_matches("\\level.level");
-		log::trace!("level_name: {level_name}");
+	let level_name = level_name_full
+		.trim_start_matches(".\\levels\\")
+		.trim_end_matches("\\level.level");
+	log::trace!("level_name: {level_name}");
 
-		let ad_count = (*advert_manager).ad_count;
-		log::trace!("ad_count: {ad_count}");
-		if ad_count < 1 {
-			return;
+	let ad_count = unsafe { (*advert_manager).ad_count };
+	log::trace!("ad_count: {ad_count}");
+	if ad_count < 1 {
+		return;
+	}
+
+	let cache = AdCache::g();
+	let cache_read = cache.read().unwrap();
+
+	let mut j: isize = 0;
+	for idx in (1..=ad_count).rev() {
+		let texture_name = format!("advert{idx}");
+		log::trace!("texture_name: {texture_name}");
+
+		let Some((tex_ptr, img_size)) = cache_read.get_tex_data(level_name, &texture_name) else {
+			log::warn!("{level_name}/{texture_name} not found in cache?");
+			// j not incremented!
+			continue;
+		};
+
+		let adv_pos = PLevelResource::get_ad_pos(p_level_resource, &texture_name);
+		log::debug!("adv_pos = {adv_pos}");
+		if adv_pos == 0xFFFFFFFF {
+			// TODO: Something Something?
 		}
 
-		let cache = AdCache::g();
-		let cache_read = cache.read().unwrap();
-
-		let mut j: isize = 0;
-		for idx in (1..=ad_count).rev() {
-			let texture_name = format!("advert{}", idx);
-			let name_of_texture = CString::from_str(&texture_name).unwrap();
-			log::trace!("texture_name: {texture_name}");
-
-			let Some((tex_ptr, size)) = cache_read.get_tex_data(level_name, &texture_name) else {
-				log::warn!("{level_name}/{texture_name} not found in cache?");
-				continue;
-			};
-
-			let mut adv_pos = 0;
-			let level_ads_data = hook_get_level_ads_data(p_level_resource);
-			hook_get_ad_position_on_level(level_ads_data, &mut adv_pos, name_of_texture.as_ptr());
-
-			log::debug!("adv_pos = {adv_pos}");
-
-			let temp = AdvertTexture {
-				unk1: [0; 0xC],
-				size: size,
-				zero: 0,
-				ptr_to_dx_texture: tex_ptr,
-				unk_id: adv_pos,
-				size_x10: 0x10,
-				texture_id: idx as u16,
-				mode: 2,
-			};
-			let offset_to_write = (*advert_manager).ptr_to_textures.wrapping_offset(j);
-			offset_to_write.write(temp);
-
-			j += 1;
+		unsafe {
+			(*advert_manager)
+				.ptr_to_textures
+				.wrapping_offset(j)
+				.write(AdvertTexture {
+					unk1: [0; 0xC],
+					size: img_size,
+					zero: 0,
+					ptr_to_dx_texture: tex_ptr,
+					unk_id: adv_pos,
+					size_x10: 0x10,
+					texture_id: idx as u16,
+					mode: 2,
+				});
 		}
+
+		j += 1;
 	}
 }
 

@@ -5,9 +5,9 @@ mod advert_manager;
 mod dx_tools;
 mod file_utils;
 
-mod hooks;
 mod cache;
 mod download;
+mod hooks;
 
 pub struct MyPlugin {}
 

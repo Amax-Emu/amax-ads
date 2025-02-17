@@ -14,13 +14,13 @@ pub fn get_d3d9_device() -> *mut IDirect3DDevice9 {
 	crate::MyPlugin::get_api().get_d3d9dev() as *mut IDirect3DDevice9
 }
 
-/// Strong independent plugin, don't need no "d3dx9_42.dll!D3DXCreateTextureFromFileInMemoryEx(.)"
-#[allow(unused)]
-#[deprecated]
+/// Strong independent plugin, shouldn't don't need no "d3dx9_42.dll!D3DXCreateTextureFromFileInMemoryEx(..)"
+// #[deprecated]
 pub fn d3d9_create_tex_from_mem_ex_v1(
 	dev: *mut IDirect3DDevice9,
 	tex_buffer: &mut [u8],
 ) -> *mut IDirect3DTexture9 {
+	//FIXME: Let's get rid of this "importing DLL business" and use device.CreateTexture(..) like the holy spirit intended.
 	fn get_module_symbol_address(module: &str, symbol: &str) -> Option<usize> {
 		use windows::{
 			core::{PCSTR, PCWSTR},
@@ -68,7 +68,7 @@ pub fn d3d9_create_tex_from_mem_ex_v1(
 
 	let mut tex_ptr: *mut IDirect3DTexture9 = std::ptr::null_mut();
 
-	log::warn!("D3DXCreateTextureFromFileInMemoryEx(");
+	log::trace!("D3DXCreateTextureFromFileInMemoryEx(");
 	d3d9_func(
 		// ptr to IDirect3DDevice9
 		dev,
@@ -87,7 +87,7 @@ pub fn d3d9_create_tex_from_mem_ex_v1(
 		// D3DFMT_R8G8B8 | https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dformat
 		D3DFMT_R8G8B8,
 		// D3DPOOL_MANAGED | https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dpool
-		D3DPOOL_MANAGED,
+		D3DPOOL_MANAGED, //D3DPOOL_MANAGED keeps it safe from Resets, the device handles all of the restoration for us!
 		// .filter = D3DX_FILTER_NONE  | https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dx-filter
 		3,
 		// .MipFilter = D3DX_FILTER_NONE
@@ -102,6 +102,6 @@ pub fn d3d9_create_tex_from_mem_ex_v1(
 		&mut tex_ptr,
 	)
 	.unwrap();
-	log::warn!(")");
+	log::trace!(")");
 	tex_ptr
 }

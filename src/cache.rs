@@ -1,12 +1,7 @@
-#![allow(unused)]
-#![allow(deprecated)]
-
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use std::sync::OnceLock;
 use std::sync::RwLock;
-use std::sync::RwLockReadGuard;
 
 use windows::Win32::Graphics::Direct3D9::IDirect3DDevice9;
 use windows::Win32::Graphics::Direct3D9::IDirect3DTexture9;
@@ -53,10 +48,7 @@ impl AdCache {
 		level_name: &str,
 		ad_name: &str,
 	) -> Option<(*mut IDirect3DTexture9, u32)> {
-		let Some(lvl) = self.find_level(level_name) else {
-			return None;
-		};
-		lvl.find_tex_data(ad_name)
+		self.find_level(level_name)?.find_tex_data(ad_name)
 	}
 }
 

@@ -23,10 +23,7 @@ pub fn remove_ads_dir(ads_dir: &Path) -> Result<(), std::io::Error> {
 	std::fs::remove_dir_all(ads_dir)
 }
 
-pub fn write_ads_checksum(
-	ads_dir: &Path,
-	checksum: &str,
-) -> Result<(), std::io::Error> {
+pub fn write_ads_checksum(ads_dir: &Path, checksum: &str) -> Result<(), std::io::Error> {
 	let src = ads_dir.join("checksum.file");
 	let mut file = std::fs::File::create(src)?;
 	let _ = file.write(checksum.as_bytes())?;

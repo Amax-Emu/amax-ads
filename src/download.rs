@@ -32,7 +32,7 @@ impl AdsDownloader {
 	pub fn download(ads_dir: &Path, remote_checksum: &str) -> Result<(), ()> {
 		let displ = ads_dir.display();
 		log::trace!("Removing local ads files...");
-		remove_ads_dir(&ads_dir).map_err(|e| {
+		remove_ads_dir(ads_dir).map_err(|e| {
 			log::error!("Failed to remove local ads dir [{displ}]: {e}");
 		})?;
 		log::info!("Downloading latest ads files...");
@@ -40,10 +40,10 @@ impl AdsDownloader {
 			log::error!("Failed download zip for ads: {e}");
 		})?;
 
-		unzip(zip_data, &ads_dir).map_err(|e| {
+		unzip(zip_data, ads_dir).map_err(|e| {
 			log::error!("Failed unzip downloaded ads: {e}");
 		})?;
-		write_ads_checksum(&ads_dir, remote_checksum).map_err(|e| {
+		write_ads_checksum(ads_dir, remote_checksum).map_err(|e| {
 			log::error!("Failed write downloaded ads checksum to disk: {e}");
 		})?;
 		Ok(())
