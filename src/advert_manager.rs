@@ -16,7 +16,7 @@ pub struct AdvertManager {
 	pub level_instance_ptr: *mut c_void,
 	pub ptr_to_textures: *mut AdvertTexture,
 	pub unk7: u32, //num of ads + 1
-	pub num_of_ads: u32,
+	pub ad_count: u32,
 }
 
 #[repr(C)]

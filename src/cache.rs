@@ -27,7 +27,6 @@ pub struct AdCache {
 	levels: Vec<LevelCache>,
 }
 
-
 impl AdCache {
 	fn new<P: AsRef<Path>>(dev: *mut IDirect3DDevice9, dir: P) -> Self {
 		let subdirs = dir
@@ -48,11 +47,15 @@ impl AdCache {
 		G_CACHE.clone()
 	}
 
-	pub fn get_tex(&self, level_name: &str, ad_name: &str) -> Option<*mut IDirect3DTexture9> {
+	pub fn get_tex_data(
+		&self,
+		level_name: &str,
+		ad_name: &str,
+	) -> Option<(*mut IDirect3DTexture9, u32)> {
 		let Some(lvl) = self.find_level(level_name) else {
 			return None;
 		};
-		lvl.find_tex(ad_name)
+		lvl.find_tex_data(ad_name)
 	}
 }
 
@@ -88,8 +91,8 @@ impl LevelCache {
 		self.ads.iter().find(|ad| ad.ad_name == ad_name)
 	}
 
-	fn find_tex(&self, ad_name: &str) -> Option<*mut IDirect3DTexture9> {
-		self.find_ad(ad_name).map(|ad| ad.tex)
+	fn find_tex_data(&self, ad_name: &str) -> Option<(*mut IDirect3DTexture9, u32)> {
+		self.find_ad(ad_name).map(|ad| (ad.tex, ad.img_data_len))
 	}
 }
 
@@ -97,6 +100,7 @@ impl LevelCache {
 pub struct Ad {
 	ad_name: String,
 	tex: *mut IDirect3DTexture9,
+	img_data_len: u32,
 }
 unsafe impl Send for Ad {}
 unsafe impl Sync for Ad {}
@@ -105,18 +109,23 @@ impl Ad {
 	pub fn new<P: AsRef<Path>>(dev: *mut IDirect3DDevice9, png_path: P) -> Self {
 		let ad_name = png_path
 			.as_ref()
-			.file_name()
+			.file_stem()
 			.unwrap()
 			.to_str()
 			.unwrap()
 			.to_string();
 		let mut data = std::fs::read(&png_path).unwrap();
+		let img_data_len = data.len() as u32;
 		let tex = d3d9_create_tex_from_mem_ex_v1(dev, &mut data);
 		{
 			// FIXME
 			let pp = png_path.as_ref().display();
 			log::info!("added to cache: {pp}");
 		}
-		Self { ad_name, tex }
+		Self {
+			ad_name,
+			tex,
+			img_data_len,
+		}
 	}
 }

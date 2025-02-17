@@ -1,10 +1,13 @@
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::{
+	ffi::{c_char, c_void, CStr, CString},
+	str::FromStr,
+};
 
 use retour::static_detour;
 
 use crate::{
 	advert_manager::{AdvertManager, AdvertTexture, PLevelResource},
-	dx_tools::get_d3d9_device,
+	cache::AdCache,
 	file_utils::{
 		download_ads_zip, get_appdata_amax_path, get_local_checksum, get_remote_checksum,
 		remove_ads_dir, unpack_ads, write_ads_checksum,
@@ -168,20 +171,7 @@ pub fn hook_enter_zone_post_load(
 	p_level_resource: *mut PLevelResource,
 	p_level_instance: *mut c_void,
 ) {
-	let Some(appdata_amax_path) = get_appdata_amax_path() else {
-		log::error!("Failed to get appdata blur dir. Falling back to base function.");
-		return unsafe {
-			EnterZone_PostLoad.call(advert_manager, p_level_resource, p_level_instance)
-		};
-	};
-	let ads_path = appdata_amax_path.join("ads");
-	if !ads_path.is_dir() {
-		log::error!("Failed to get ads dir. Falling back to base function.");
-		return unsafe {
-			EnterZone_PostLoad.call(advert_manager, p_level_resource, p_level_instance)
-		};
-	}
-
+	// return unsafe { EnterZone_PostLoad.call(advert_manager, p_level_resource, p_level_instance) };
 	unsafe {
 		(*advert_manager).level_instance_ptr = p_level_instance;
 
@@ -189,71 +179,47 @@ pub fn hook_enter_zone_post_load(
 			.to_str()
 			.unwrap_or_default();
 
-		log::debug!("Level file path - {}", level_name_full);
+		log::trace!("level_name_full: \"{level_name_full}\"");
 
 		let level_name = level_name_full
-			.replace(".\\levels\\", "")
-			.replace("\\level.level", "");
+			.trim_start_matches(".\\levels\\")
+			.trim_end_matches("\\level.level");
+		log::trace!("level_name: {level_name}");
 
-		log::debug!("Level name - {}", &level_name);
-
-		let num_of_ads = (*advert_manager).num_of_ads;
-		log::debug!("num_of_ads - {}", num_of_ads);
-		if num_of_ads < 1 {
+		let ad_count = (*advert_manager).ad_count;
+		log::trace!("ad_count: {ad_count}");
+		if ad_count < 1 {
 			return;
 		}
 
-		// let get_ads_pos_fn: FnGetAdPositionOnLevel = std::mem::transmute(0x00723cf0);
-		// let get_level_ads_data: GetLevelAdsData = std::mem::transmute(0x0087de10);
+		let cache = AdCache::g();
+		let cache_read = cache.read().unwrap();
 
 		let mut j: isize = 0;
+		for idx in (1..=ad_count).rev() {
+			let texture_name = format!("advert{}", idx);
+			let name_of_texture = CString::from_str(&texture_name).unwrap();
+			log::trace!("texture_name: {texture_name}");
 
-		let Some(d3d9_device) = get_d3d9_device() else {
-			return;
-		};
-
-		for i in (1..num_of_ads + 1).rev() {
-			let texture_name = format!("advert{}", i);
-			log::debug!("Checking texture {}", &texture_name);
-			let name_of_texture = CString::new(texture_name).unwrap_or_default();
+			let Some((tex_ptr, size)) = cache_read.get_tex_data(level_name, &texture_name) else {
+				log::warn!("{level_name}/{texture_name} not found in cache?");
+				continue;
+			};
 
 			let mut adv_pos = 0;
 			let level_ads_data = hook_get_level_ads_data(p_level_resource);
-			hook_get_ad_position_on_level(
-				level_ads_data as _,
-				std::ptr::addr_of_mut!(adv_pos),
-				name_of_texture.as_ptr(),
-			);
+			hook_get_ad_position_on_level(level_ads_data, &mut adv_pos, name_of_texture.as_ptr());
 
-			log::debug!("Ads pos - {:x}", adv_pos);
-
-			let full_path = appdata_amax_path
-				.join("ads")
-				.join(&level_name)
-				.join(format!("advert{}.png", i));
-			log::debug!("File path {:?}", &full_path);
-
-			let mut img_data = match std::fs::read(&full_path) {
-				Ok(img_data) => img_data,
-				Err(e) => {
-					log::error!("Failed to read file {:?} - {e}", &full_path);
-					continue;
-				}
-			};
-
-			let size = img_data.len() as u32;
-
-			#[allow(deprecated)]
-			let new_texture = crate::dx_tools::d3d9_create_tex_from_mem_ex_v1(d3d9_device, &mut img_data);
+			log::debug!("adv_pos = {adv_pos}");
 
 			let temp = AdvertTexture {
 				unk1: [0; 0xC],
-				size: size as u32,
+				size: size,
 				zero: 0,
-				ptr_to_dx_texture: new_texture,
+				ptr_to_dx_texture: tex_ptr,
 				unk_id: adv_pos,
 				size_x10: 0x10,
-				texture_id: i as u16,
+				texture_id: idx as u16,
 				mode: 2,
 			};
 			let offset_to_write = (*advert_manager).ptr_to_textures.wrapping_offset(j);
