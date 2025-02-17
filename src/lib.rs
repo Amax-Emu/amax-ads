@@ -1,66 +1,73 @@
-use advert_manager::{advert_manager_initialize_hook, zone_postload_hook};
-use log::debug;
-use windows::{
-    Win32::Foundation::HMODULE,
-    Win32::System::SystemServices::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH},
-};
+use advert_manager::{install_hook_advert_manager_initialize_system, install_hook_zone_postload};
+use blur_plugins_core::{BlurAPI, BlurPlugin};
+use std::ffi::c_void;
 
 mod advert_manager;
 mod dx_tools;
 mod file_utils;
 
-pub static EXE_BASE_ADDR: i32 = 0x00400000;
+pub struct MyPlugin {}
+
+static mut G_API: Option<&dyn BlurAPI> = None;
+
+impl MyPlugin {
+    fn new(api: &dyn BlurAPI) -> Self {
+        let ptr_base = api.get_exe_base_ptr();
+        unsafe { install_hook_zone_postload(ptr_base) };
+        unsafe { install_hook_advert_manager_initialize_system(ptr_base) };
+        Self {}
+    }
+
+    pub fn get_api() -> &'static dyn BlurAPI {
+        unsafe { G_API.unwrap() }
+    }
+
+    pub fn get_exe_base_ptr() -> *mut c_void {
+        Self::get_api().get_exe_base_ptr()
+    }
+}
+
+impl BlurPlugin for MyPlugin {
+    fn name(&self) -> &'static str {
+        "AMAX_ADS"
+    }
+
+    fn on_event(&self, _event: &blur_plugins_core::BlurEvent) {}
+
+    fn free(&self) {}
+}
+
+#[no_mangle]
+fn plugin_init(api: &'static mut dyn BlurAPI) -> Box<dyn BlurPlugin> {
+    init_logs();
+    unsafe {
+        G_API = Some(api);
+    }
+    Box::new(MyPlugin::new(api))
+}
 
 fn init_logs() {
-    use log::LevelFilter;
     use simplelog::{
-        ColorChoice, CombinedLogger, Config, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
+        ColorChoice, CombinedLogger, ConfigBuilder, LevelFilter, TermLogger, TerminalMode,
+        WriteLogger,
     };
     let cfg = ConfigBuilder::new()
         .set_time_offset_to_local()
         .unwrap()
+        //.add_filter_allow_str("amax_ads")
         .build();
+
+    let log_file = blur_plugins_core::create_log_file("amax_ads.log").unwrap();
+
     CombinedLogger::init(vec![
         TermLogger::new(
             LevelFilter::Trace,
-            cfg,
+            cfg.clone(),
             TerminalMode::Mixed,
             ColorChoice::Auto,
         ),
-        WriteLogger::new(
-            LevelFilter::Trace,
-            Config::default(),
-            std::fs::File::create(".\\ads.log").expect("Couldn't create log file: .\\ads.log"),
-        ),
+        WriteLogger::new(LevelFilter::Trace, cfg, log_file),
     ])
     .unwrap();
     log_panics::init();
-}
-
-#[no_mangle]
-#[allow(non_snake_case)]
-extern "system" fn DllMain(
-    dll_module: windows::Win32::Foundation::HMODULE,
-    call_reason: u32,
-    _reserved: *mut std::ffi::c_void,
-) -> i32 {
-    match call_reason {
-        DLL_PROCESS_ATTACH => init(dll_module),
-        DLL_PROCESS_DETACH => free(dll_module),
-        _ => (),
-    }
-    true.into()
-}
-
-pub fn init(module: HMODULE) {
-    init_logs();
-    debug!("amax_ads base: {module:X?}");
-    unsafe { zone_postload_hook() };
-    unsafe { advert_manager_initialize_hook() };
-
-    //let _ptr_base: *mut c_void = unsafe { GetModuleHandleA(PCSTR::null()) }.unwrap().0 as _;
-}
-
-pub fn free(module: HMODULE) {
-    debug!("amax_ads exiting: {module:X?}");
 }

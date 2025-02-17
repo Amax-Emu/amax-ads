@@ -65,7 +65,7 @@ static_detour! {
     static AdvertManager_InitialiseSystem: unsafe extern "thiscall" fn(*mut AdvertManager);
 }
 
-pub unsafe fn zone_postload_hook() {
+pub unsafe fn install_hook_zone_postload(ptr_base: *mut c_void) {
     unsafe {
         let original_call = std::mem::transmute::<
             usize,
@@ -79,7 +79,7 @@ pub unsafe fn zone_postload_hook() {
     };
 }
 
-pub unsafe fn advert_manager_initialize_hook() {
+pub unsafe fn install_hook_advert_manager_initialize_system(ptr_base: *mut c_void) {
     unsafe {
         let original_call = std::mem::transmute::<
             usize,
@@ -93,7 +93,7 @@ pub unsafe fn advert_manager_initialize_hook() {
     };
 }
 
-fn advert_manager_initialize(AdvertManager: *mut AdvertManager) {
+fn advert_manager_initialize(advert_manager: *mut AdvertManager) {
     thread::spawn(|| {
         if let Some(appdata_amax_path) = get_appdata_amax_path() {
             let local_checksum = get_local_checksum(&appdata_amax_path).unwrap_or_default();
@@ -127,11 +127,11 @@ fn advert_manager_initialize(AdvertManager: *mut AdvertManager) {
         }
     });
 
-    unsafe { AdvertManager_InitialiseSystem.call(AdvertManager) }
+    unsafe { AdvertManager_InitialiseSystem.call(advert_manager) }
 }
 
 fn zone_postload(
-    AdvertManager: *mut AdvertManager,
+    advert_manager: *mut AdvertManager,
     pLevelResource: *mut PLevelResource,
     pLevelInstance: *mut c_void,
 ) {
@@ -140,7 +140,7 @@ fn zone_postload(
         None => {
             error!("Failed to get appdata blur dir. Falling back to base function.");
             return unsafe {
-                EnterZone_PostLoad.call(AdvertManager, pLevelResource, pLevelInstance)
+                EnterZone_PostLoad.call(advert_manager, pLevelResource, pLevelInstance)
             };
         }
     };
@@ -152,18 +152,18 @@ fn zone_postload(
         false => {
             error!("Failed to get ads dir. Falling back to base function.");
             return unsafe {
-                EnterZone_PostLoad.call(AdvertManager, pLevelResource, pLevelInstance)
+                EnterZone_PostLoad.call(advert_manager, pLevelResource, pLevelInstance)
             };
         }
     }
 
     unsafe {
-        (*AdvertManager).level_instance_ptr = pLevelInstance;
+        (*advert_manager).level_instance_ptr = pLevelInstance;
 
         let level_name_full = CStr::from_ptr((*pLevelResource).level_name.as_ptr())
             .to_str()
             .unwrap_or_default();
-        
+
         debug!("Level file path - {}", level_name_full);
 
         let level_name = level_name_full
@@ -172,14 +172,14 @@ fn zone_postload(
 
         debug!("Level name - {}", &level_name);
 
-        let num_of_ads = (*AdvertManager).num_of_ads;
+        let num_of_ads = (*advert_manager).num_of_ads;
         debug!("num_of_ads - {}", num_of_ads);
         if num_of_ads < 1 {
             return;
         }
 
-        let get_ads_pos_fn: GetAdPositionOnLevel = std::mem::transmute(0x00723cf0) ;
-        let get_level_ads_data: GetLevelAdsData = std::mem::transmute(0x0087de10) ;
+        let get_ads_pos_fn: GetAdPositionOnLevel = std::mem::transmute(0x00723cf0);
+        let get_level_ads_data: GetLevelAdsData = std::mem::transmute(0x0087de10);
 
         let mut j: isize = 0;
 
@@ -243,7 +243,7 @@ fn zone_postload(
                 texture_id: i as u16,
                 mode: 2,
             };
-            let offset_to_write = (*AdvertManager).ptr_to_textures.wrapping_offset(j);
+            let offset_to_write = (*advert_manager).ptr_to_textures.wrapping_offset(j);
             offset_to_write.write(temp);
 
             j += 1;

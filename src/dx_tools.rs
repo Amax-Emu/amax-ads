@@ -1,4 +1,3 @@
-use log::{debug, info, warn};
 use std::{
     ffi::{c_void, CString},
     iter, ptr,
@@ -29,27 +28,8 @@ type D3DXCreateTextureFromFileInMemoryEx = extern "stdcall" fn(
 ) -> HRESULT;
 
 pub unsafe fn get_d3d9_device() -> Option<*mut IDirect3DDevice9> {
-    let start = crate::EXE_BASE_ADDR + 0x00D44EE4;
-
-    let ptr = start as *const i32;
-    debug!("Addr of start: {:?}", start);
-    debug!("Addr of ptr1: {:p},value: {}", ptr, *ptr);
-
-    if *ptr == 0 {
-        warn!("Failed to aquire d3d9 device handle");
-        return None;
-    }
-
-    let step2 = *ptr;
-
-    let step3 = step2 + 0x14;
-
-    let step4 = step3 as *const i32;
-    debug!("Addr of step4: {:p},value: {}", step4, *step4);
-    let d3d9_ptr_real = *step4 as *mut IDirect3DDevice9;
-    info!("Addr of d3d device: {:p}", d3d9_ptr_real);
-
-    return Some(d3d9_ptr_real);
+    let dev_ptr = crate::MyPlugin::get_api().get_d3d9dev() as *mut IDirect3DDevice9;
+    Some(dev_ptr)
 }
 
 pub fn d3d9_load_texture_from_memory_ex_new(
@@ -74,7 +54,7 @@ pub fn d3d9_load_texture_from_memory_ex_new(
             1,
             0,
             D3DFMT_R8G8B8,
-            D3DPOOL(0),
+            D3DPOOL_MANAGED,
             3 << 0,
             3 << 0,
             0,
@@ -83,7 +63,7 @@ pub fn d3d9_load_texture_from_memory_ex_new(
             ptr::addr_of_mut!(texture) as *mut _,
         );
 
-        debug!(
+        log::debug!(
             "Result of D3DXCreateTextureFromFileInMemoryEx: {:?}",
             &result
         );
