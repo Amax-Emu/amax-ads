@@ -10,9 +10,8 @@ use windows::{
 	},
 };
 
-pub fn get_d3d9_device() -> Option<*mut IDirect3DDevice9> {
-	let dev_ptr = crate::MyPlugin::get_api().get_d3d9dev() as *mut IDirect3DDevice9;
-	Some(dev_ptr)
+pub fn get_d3d9_device() -> *mut IDirect3DDevice9 {
+	crate::MyPlugin::get_api().get_d3d9dev() as *mut IDirect3DDevice9
 }
 
 /// Strong independent plugin, don't need no "d3dx9_42.dll!D3DXCreateTextureFromFileInMemoryEx(.)"

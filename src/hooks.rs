@@ -8,10 +8,7 @@ use retour::static_detour;
 use crate::{
 	advert_manager::{AdvertManager, AdvertTexture, PLevelResource},
 	cache::AdCache,
-	file_utils::{
-		download_ads_zip, get_appdata_amax_path, get_local_checksum, get_remote_checksum,
-		remove_ads_dir, unpack_ads, write_ads_checksum,
-	},
+	download::AdsDownloader,
 };
 
 pub fn install(ptr_base: *mut c_void) {
@@ -119,50 +116,16 @@ fn install_hook_get_level_ads_data(ptr_base: *mut c_void) {
 }
 
 pub fn hook_advert_manager_initialize_system(advert_manager: *mut AdvertManager) {
-	{
-		let p = crate::MyPlugin::get_api().get_d3d9dev();
-		log::warn!("AdvertManager_InitializeSystem called! get_d3d9dev() is {p:?}");
-	}
 	std::thread::Builder::new()
 		.name("AMAX-ADS-Downloader".to_string())
 		.spawn(|| {
-			if let Some(appdata_amax_path) = get_appdata_amax_path() {
-				let local_checksum = get_local_checksum(&appdata_amax_path).unwrap_or_default();
-				let remote_checksum_opt = get_remote_checksum();
-
-				match remote_checksum_opt {
-					Some(remote_checksum) => match remote_checksum == local_checksum {
-						true => {
-							log::info!(
-								"Local and Remote checksums are the same. Skipping download."
-							);
-						}
-						false => {
-							log::info!("Downloading latest ads files...");
-							remove_ads_dir(&appdata_amax_path);
-							match download_ads_zip(&appdata_amax_path) {
-								Some(path_to_zip) => match unpack_ads(&path_to_zip) {
-									Ok(_) => {
-										write_ads_checksum(&appdata_amax_path, remote_checksum);
-									}
-									Err(e) => {
-										log::error!("Failed to unpack ads archive - {e}")
-									}
-								},
-								None => {
-									log::error!("Failed to download ads archive!")
-								}
-							};
-						}
-					},
-					None => {}
-				}
-				let cache = crate::cache::AdCache::g();
-				log::debug!("{cache:?}")
+			match AdsDownloader::resolve() {
+				Ok(_) => log::info!("AdsDownloader::resolve() OK."),
+				Err(_) => log::error!("AdsDownloader::resolve() failed!"),
 			}
+			AdCache::g();
 		})
 		.expect("failed to created amax ads downloader thread");
-
 	AdvertManager_InitializeSystem.call(advert_manager);
 }
 

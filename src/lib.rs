@@ -7,6 +7,7 @@ mod file_utils;
 
 mod hooks;
 mod cache;
+mod download;
 
 pub struct MyPlugin {}
 
@@ -30,7 +31,7 @@ impl MyPlugin {
 
 impl BlurPlugin for MyPlugin {
 	fn name(&self) -> &'static str {
-		"AMAX_ADS"
+		"AMAX Ads"
 	}
 
 	fn on_event(&self, _event: &blur_plugins_core::BlurEvent) {}
@@ -55,7 +56,7 @@ fn init_logs() {
 	let cfg = ConfigBuilder::new()
 		.set_time_offset_to_local()
 		.unwrap()
-		//.add_filter_allow_str("amax_ads")
+		.add_filter_allow_str("amax_ads")
 		.build();
 
 	let log_file = blur_plugins_core::create_log_file("amax_ads.log").unwrap();

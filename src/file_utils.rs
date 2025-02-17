@@ -1,168 +1,63 @@
-use log::{debug, error, warn};
-use std::fs::File;
-use std::io::Write as io_write;
+use std::io::{Cursor, Write as io_write};
 use std::path::{Path, PathBuf};
-use std::{fs, io};
 
-pub fn get_remote_checksum() -> Option<String> {
-	let url = url_gen("/checksum.file");
-
-	let response = match reqwest::blocking::get(url) {
-		Ok(response) => response,
-		Err(e) => {
-			error!("Failed to get checksum.file - {e}");
-			return None;
-		}
-	};
-
-	match response.text() {
-		Ok(version_string) => {
-			let temp = version_string.replace("\n", "");
-			Some(temp)
-		}
-		Err(e) => {
-			error!("Failed to convert checksum to text - {e}");
-			return None;
-		}
-	}
-}
-
-pub fn download_ads_zip(path: &Path) -> Option<PathBuf> {
-	let url = url_gen("/ads.zip");
-
-	let ads_zip_path = path.join("ads.zip");
-
-	download_file(&url, &ads_zip_path)
-}
-
-pub fn download_file(url: &str, path: &Path) -> Option<PathBuf> {
-	// Reqwest setup
-	let response = match reqwest::blocking::get(url) {
-		Ok(resp) => resp,
-		Err(e) => {
-			error!("Failed to download file - {e}");
-			return None;
-		}
-	};
-
-	let file_data = match response.bytes() {
-		Ok(data) => data.to_vec(),
-		Err(e) => {
-			error!("Failed to convert response to bytes - {e}");
-			return None;
-		}
-	};
-
-	let mut file = match File::create(path) {
-		Ok(file) => file,
-		Err(e) => {
-			error!("Failed to create file - {e}");
-			return None;
-		}
-	};
-
-	let _ = file.write(&file_data);
-
-	return Some(path.to_path_buf());
-}
-
-fn url_gen(url: &str) -> String {
-	format!("https://amax-ads.fra1.cdn.digitaloceanspaces.com{url}")
-}
-
-pub fn remove_ads_dir(appdata_amax_path: &Path) {
-	let ads_path = appdata_amax_path.join("ads");
-	let _ = fs::remove_dir(ads_path);
-}
-
-pub fn write_ads_checksum(appdata_amax_path: &Path, checksum: String) {
-	let ads_checksum_path = appdata_amax_path.join("ads").join("checksum.file");
-	if let Ok(mut file) = fs::File::create(ads_checksum_path) {
-		let _ = file.write(checksum.as_bytes());
-	}
-}
-
-pub fn unpack_ads(path: &Path) -> Result<bool, std::io::Error> {
-	let fname = path;
-
-	let base_path = match fname.parent() {
-		Some(path) => path.to_owned(),
-		None => PathBuf::new(),
-	};
-
-	let file = fs::File::open(fname)?;
-
-	let mut archive = zip::ZipArchive::new(file)?;
-
-	for i in 0..archive.len() {
-		let mut file = archive.by_index(i)?;
-		let outpath = match file.enclosed_name() {
-			Some(path) => {
-				let temp_path = base_path.join(path);
-				temp_path
-			}
-			None => continue,
-		};
-
-		debug!("{}", outpath.display());
-
-		if (*file.name()).ends_with('/') {
-			debug!("File {} extracted to \"{}\"", i, outpath.display());
-			fs::create_dir_all(&outpath)?;
-		} else {
-			debug!(
-				"File {} extracted to \"{}\" ({} bytes)",
-				i,
-				outpath.display(),
-				file.size()
-			);
-
-			if let Some(p) = outpath.parent() {
-				if !p.exists() {
-					fs::create_dir_all(p)?;
-				}
-			}
-			let mut outfile = fs::File::create(&outpath)?;
-			io::copy(&mut file, &mut outfile)?;
-		}
-	}
-
-	Ok(true)
-}
-
-pub fn get_local_checksum(appdata_amax_path: &Path) -> Option<String> {
-	let checksum_path = appdata_amax_path.join("ads").join("checksum.file");
-
-	match fs::read_to_string(checksum_path) {
-		Ok(local_version) => Some(local_version),
-		Err(e) => {
-			warn!("Failed to get local checksum - {e}");
-			return None;
-		}
-	}
-}
-
-
-
-pub fn get_appdata_amax_path() -> Option<PathBuf> {
-	let dir = match known_folders::get_known_folder_path(known_folders::KnownFolder::RoamingAppData)
-	{
-		Some(appdata_dir) => appdata_dir
-			.join("bizarre creations")
-			.join("blur")
-			.join("amax"),
-		None => return None,
-	};
-
+pub fn get_ads_path() -> Result<PathBuf, std::io::Error> {
+	let dir = known_folders::get_known_folder_path(known_folders::KnownFolder::RoamingAppData)
+		.ok_or_else(|| std::io::Error::other("Couldn't get FOLDERID_RoamingAppData (defaut: %USERPROFILE%\\AppData\\Roaming [%APPDATA%]) from system"))?
+		.join("bizarre creations")
+		.join("blur")
+		.join("amax")
+		.join("amax_ads");
 	if !&dir.is_dir() {
-		match fs::create_dir_all(&dir) {
-			Ok(_) => Some(dir),
-			Err(e) => {
-				log::error!("Failed to create amax folder in AppData: {e}");
-				None
+		std::fs::create_dir_all(&dir)?;
+	};
+	Ok(dir)
+}
+
+pub fn get_local_checksum(ads_dir: &Path) -> Result<String, std::io::Error> {
+	let checksum_path = ads_dir.join("checksum.file");
+	std::fs::read_to_string(checksum_path)
+}
+
+pub fn remove_ads_dir(ads_dir: &Path) -> Result<(), std::io::Error> {
+	std::fs::remove_dir_all(ads_dir)
+}
+
+pub fn write_ads_checksum(
+	ads_dir: &Path,
+	checksum: &str,
+) -> Result<(), std::io::Error> {
+	let src = ads_dir.join("checksum.file");
+	let mut file = std::fs::File::create(src)?;
+	let _ = file.write(checksum.as_bytes())?;
+	Ok(())
+}
+
+pub fn unzip(data: Vec<u8>, dst: &Path) -> Result<(), std::io::Error> {
+	let mut data = Cursor::new(data);
+	let mut archive = zip::ZipArchive::new(&mut data)?;
+
+	for idx in 0..archive.len() {
+		let mut file = archive.by_index(idx)?;
+		let Some(extracted_file) = file.enclosed_name() else {
+			continue;
+		};
+		let extracted_file_dst = dst.join(extracted_file);
+		let extracted_displ = extracted_file_dst.display();
+		if file.is_dir() {
+			std::fs::create_dir_all(&extracted_file_dst)?;
+			log::debug!("Created {extracted_displ} from zip archive[{idx}]");
+			continue;
+		}
+		if let Some(p) = extracted_file.parent() {
+			if !p.exists() {
+				std::fs::create_dir_all(p)?;
 			}
 		}
-	} else {
-		Some(dir)
+		let size = file.size();
+		let mut outfile = std::fs::File::create(&extracted_file_dst)?;
+		std::io::copy(&mut file, &mut outfile)?;
+		log::debug!("Created file {extracted_displ} ({size} bytes) from zip archive[{idx}]");
 	}
+	Ok(())
 }

@@ -12,12 +12,13 @@ use windows::Win32::Graphics::Direct3D9::IDirect3DDevice9;
 use windows::Win32::Graphics::Direct3D9::IDirect3DTexture9;
 
 use crate::dx_tools::d3d9_create_tex_from_mem_ex_v1;
-use crate::file_utils::get_appdata_amax_path;
+use crate::dx_tools::get_d3d9_device;
+use crate::file_utils::get_ads_path;
 
+// I don't like this solution, it has unwrap and fs stuff inside LazyLock:
 static G_CACHE: LazyLock<Arc<RwLock<AdCache>>> = LazyLock::new(|| {
-	let dev: *mut IDirect3DDevice9 =
-		crate::MyPlugin::get_api().get_d3d9dev() as *mut IDirect3DDevice9;
-	let dir = get_appdata_amax_path().unwrap().join("ads");
+	let dev = get_d3d9_device();
+	let dir = get_ads_path().unwrap().join("ads");
 	let my_cache = AdCache::new(dev, dir);
 	Arc::new(RwLock::new(my_cache))
 });
@@ -79,8 +80,8 @@ impl LevelCache {
 			.as_ref()
 			.read_dir()
 			.unwrap()
-			.filter(|dir_entry| dir_entry.as_ref().unwrap().path().extension().unwrap() == "png")
-			.map(|f| f.unwrap().path());
+			.map(|dir_entry| dir_entry.as_ref().unwrap().path())
+			.filter(|p| p.extension().is_some_and(|ext| ext == "png"));
 
 		let ads: Vec<Ad> = pngs_in_dir.map(|png| Ad::new(dev, png)).collect();
 
@@ -120,7 +121,7 @@ impl Ad {
 		{
 			// FIXME
 			let pp = png_path.as_ref().display();
-			log::info!("added to cache: {pp}");
+			log::trace!("Adding Ad to cache: {pp}");
 		}
 		Self {
 			ad_name,
