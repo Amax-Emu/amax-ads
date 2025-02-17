@@ -24,7 +24,7 @@ pub struct AdvertTexture {
 	pub unk1: [u8; 0xC],
 	pub size: u32,
 	pub zero: u32,
-	pub ptr_to_dx_texture: IDirect3DTexture9,
+	pub ptr_to_dx_texture: *mut IDirect3DTexture9,
 	pub unk_id: u32,
 	pub size_x10: u16,   //always 0x10
 	pub texture_id: u16, //advert[10]

@@ -4,7 +4,7 @@ use retour::static_detour;
 
 use crate::{
 	advert_manager::{AdvertManager, AdvertTexture, PLevelResource},
-	dx_tools::{d3d9_load_texture_from_memory_ex_new, get_d3d9_device},
+	dx_tools::get_d3d9_device,
 	file_utils::{
 		download_ads_zip, get_appdata_amax_path, get_local_checksum, get_remote_checksum,
 		remove_ads_dir, unpack_ads, write_ads_checksum,
@@ -154,6 +154,8 @@ pub fn hook_advert_manager_initialize_system(advert_manager: *mut AdvertManager)
 					},
 					None => {}
 				}
+				let cache = crate::cache::AdCache::g();
+				log::debug!("{cache:?}")
 			}
 		})
 		.expect("failed to created amax ads downloader thread");
@@ -231,7 +233,7 @@ pub fn hook_enter_zone_post_load(
 				.join(format!("advert{}.png", i));
 			log::debug!("File path {:?}", &full_path);
 
-			let img_data = match std::fs::read(&full_path) {
+			let mut img_data = match std::fs::read(&full_path) {
 				Ok(img_data) => img_data,
 				Err(e) => {
 					log::error!("Failed to read file {:?} - {e}", &full_path);
@@ -241,17 +243,8 @@ pub fn hook_enter_zone_post_load(
 
 			let size = img_data.len() as u32;
 
-			let new_texture = match d3d9_load_texture_from_memory_ex_new(d3d9_device, img_data) {
-				Ok(texture_result) => match texture_result {
-					Some(texture) => texture,
-					None => {
-						continue; //this is safe
-					}
-				},
-				Err(_) => {
-					continue; //this is safe
-				}
-			};
+			#[allow(deprecated)]
+			let new_texture = crate::dx_tools::d3d9_create_tex_from_mem_ex_v1(d3d9_device, &mut img_data);
 
 			let temp = AdvertTexture {
 				unk1: [0; 0xC],

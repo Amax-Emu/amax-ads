@@ -6,6 +6,7 @@ mod dx_tools;
 mod file_utils;
 
 mod hooks;
+mod cache;
 
 pub struct MyPlugin {}
 
