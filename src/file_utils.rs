@@ -141,3 +141,28 @@ pub fn get_local_checksum(appdata_amax_path: &Path) -> Option<String> {
 		}
 	}
 }
+
+
+
+pub fn get_appdata_amax_path() -> Option<PathBuf> {
+	let dir = match known_folders::get_known_folder_path(known_folders::KnownFolder::RoamingAppData)
+	{
+		Some(appdata_dir) => appdata_dir
+			.join("bizarre creations")
+			.join("blur")
+			.join("amax"),
+		None => return None,
+	};
+
+	if !&dir.is_dir() {
+		match fs::create_dir_all(&dir) {
+			Ok(_) => Some(dir),
+			Err(e) => {
+				log::error!("Failed to create amax folder in AppData: {e}");
+				None
+			}
+		}
+	} else {
+		Some(dir)
+	}
+}

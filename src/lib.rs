@@ -1,10 +1,11 @@
-use advert_manager::{install_hook_advert_manager_initialize_system, install_hook_zone_postload};
 use blur_plugins_core::{BlurAPI, BlurPlugin};
 use std::ffi::c_void;
 
 mod advert_manager;
 mod dx_tools;
 mod file_utils;
+
+mod hooks;
 
 pub struct MyPlugin {}
 
@@ -13,8 +14,7 @@ static mut G_API: Option<&dyn BlurAPI> = None;
 impl MyPlugin {
 	fn new(api: &dyn BlurAPI) -> Self {
 		let ptr_base = api.get_exe_base_ptr();
-		install_hook_zone_postload(ptr_base);
-		install_hook_advert_manager_initialize_system(ptr_base);
+		hooks::install(ptr_base);
 		Self {}
 	}
 
