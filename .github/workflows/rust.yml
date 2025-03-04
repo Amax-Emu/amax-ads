@@ -1,0 +1,60 @@
+name: Build amax_ads.asi
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@v4
+
+    - name: Install nightly
+      run: |
+        rustup toolchain install nightly-x86_64-pc-windows-msvc
+        rustup default nightly
+        rustup target add i686-pc-windows-msvc
+
+    - name: Build debug [msvc]
+      run: cargo +nightly build --verbose --target=i686-pc-windows-msvc
+      
+    - name: Build release [msvc]
+      run: cargo +nightly build --verbose --release --target=i686-pc-windows-msvc
+
+    - name: Join output
+      shell: bash
+      run: |
+        mkdir ./build
+        mkdir ./build/debug/
+        cp ./target/i686-pc-windows-msvc/debug/amax_ads.dll ./build/debug/
+        cp ./target/i686-pc-windows-msvc/debug/amax_ads.pdb ./build/debug/
+        mkdir ./build/release/
+        cp ./target/i686-pc-windows-msvc/release/amax_ads.dll ./build/release/
+
+    - name: Collect build
+      uses: actions/upload-artifact@v4
+      with:
+        name: build
+        path: |
+          ./build
+
+    - name: Collect debug artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: amax-ads_debug
+        path: |
+          ./target/i686-pc-windows-msvc/debug/amax_ads.dll
+          ./target/i686-pc-windows-msvc/debug/amax_ads.pdb
+
+    - name: Collect release artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: amax-ads_release
+        path: |
+          ./target/i686-pc-windows-msvc/release/amax_ads.dll
